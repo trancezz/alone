@@ -1,0 +1,8 @@
+spring:
+  cloud:
+    nacos:
+      discovery:
+        server-addr: nacos:8848
+        weight: 1
+        namespace: 36f61d42-1ae1-4833-8146-f80b9a5fd692
+        group: ALONE_GROUP
