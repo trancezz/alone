@@ -4,14 +4,9 @@ import cn.hutool.core.util.RandomUtil;
 import cn.hutool.log.Log;
 import cn.hutool.log.LogFactory;
 import com.twotrance.alone.common.Constants;
-import com.twotrance.alone.common.utils.EnThread;
 import com.twotrance.alone.service.AbstractIDGenerate;
 import com.twotrance.alone.config.ExceptionMsgProperties;
 import org.springframework.stereotype.Service;
-
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * SnowFlakeService
@@ -24,111 +19,102 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class SnowFlakeService extends AbstractIDGenerate {
 
     /**
-     * 日志记录
+     * logger
      */
     private static final Log log = LogFactory.get();
 
     /**
-     * 开始时间
+     * start timestamp
      */
     private final long startTime = 1611852459517L;
 
     /**
-     * 机器ID
+     * machine id
      */
     public static volatile Long machineID;
 
     /**
-     * 上一次获取ID的时间戳
+     * last timestamp
      */
     private long lastTimestamp = -1L;
 
     /**
-     * 序列号
+     * sequence no
      */
     private long sequence = 0L;
 
     /**
-     * 序列号位数
+     * the number of sequence no offsets
      */
     private long sequenceBits = 10L;
 
     /**
-     * 机器ID偏移12位
+     * the number of machine id offsets
      */
     private final long machineIdOffset = 12L;
 
     /**
-     * 时间戳偏移的位数, java中的时间戳转换为二进制位为41bits
+     * the number of timestamp offsets, the timestamp in java is converted to 41 bits in binary
      */
     private final long offsetTimestamp = sequenceBits + machineIdOffset;
 
     /**
-     * 最大的序列号
+     * maximum serial number
      */
     private final long maxSequence = ~(-1L << 12L);
 
     /**
-     * 异常信息配置文件
+     * exception information profile
      */
     private ExceptionMsgProperties ex;
 
     /**
-     * 机器ID初始化服务
+     * machine id service
      */
-    private MachineIDInitService machineIDInitService;
+    private MidService midService;
 
     /**
-     * 构造函数
+     * constructor
      *
-     * @param machineIDInitService machineID初始化服务
-     * @explain machineID 如果初始化成功那么就获取其机器ID, 并且判断机器ID是否超出最大值
-     * @explain 如果machineID为-1证明无论从Redis还是本地文件获取机器ID均失败
+     * @param midService             machine id service
+     * @param exceptionMsgProperties exception message properties
      */
-    public SnowFlakeService(MachineIDInitService machineIDInitService, ExceptionMsgProperties exceptionMsgProperties) {
+    public SnowFlakeService(MidService midService, ExceptionMsgProperties exceptionMsgProperties) {
         this.ex = exceptionMsgProperties;
-        this.machineIDInitService = machineIDInitService;
-        machineID = machineIDInitService.getMachineID();
-        if (-1 == machineID) {
-            log.error(ex.exception(1002));
-            throw ex.exception(1001);
-        }
+        this.midService = midService;
+        machineID = midService.getMachineID();
+        midInScope();
         if (log.isInfoEnabled())
-            log.info(Constants.LOG_PREFIX_PLACEHOLDER_MODE, "机器ID初始化完毕, machineID = " + machineID.toString());
+            log.info(Constants.LOG_PREFIX_PLACEHOLDER_MODE, "the machine ID has been initialized, machine id = " + machineID.toString());
     }
 
     /**
-     * 生成雪花ID
+     * generate snowflake id
      *
-     * @param bizKey 无用参数
+     * @param bizKey useless arguments
      * @return long
-     * @explain 当发生时间回拨的情况下, 查看时间差是否<5ms, 如<5ms则尝试重新获取时间戳进行修复, 否则直接抛出时间回拨, 时间差过大异常
-     * @explain 如果在同一时间戳类存在多个ID请求, 则重随机序列号来避免重复, 当然如果序列号达到最大值则也会重随
      */
     @Override
     public synchronized long id(String bizKey) {
-        if (machineIDInitService.isFailure()) {
-            log.error(ex.exception(1019));
-            throw ex.exception(1001);
-        }
-        long timestamp = ct();
+        verifyMidIsValid();
+        long timestamp = genTime();
         if (legalTime(timestamp)) {
             long callbackTimeMS = lastTimestamp - timestamp;
             if (callbackTimeMS <= 5) {
                 try {
                     wait(callbackTimeMS << 1);
-                    timestamp = ct();
+                    timestamp = genTime();
                     if (legalTime(timestamp)) {
-                        log.error(ex.exception(1003));
-                        throw ex.exception(1001);
+                        log.error(ex.exception(2003, Constants.EXCEPTION_TYPE_SNOWFLAKE));
+                        throw ex.exception(1001, Constants.EXCEPTION_TYPE_COMMON);
                     }
                 } catch (InterruptedException e) {
-                    log.error(ex.exception(1004));
-                    throw ex.exception(1001);
+                    log.error(ex.exception(2004, Constants.EXCEPTION_TYPE_SNOWFLAKE));
+                    throw ex.exception(1001, Constants.EXCEPTION_TYPE_COMMON);
                 }
             } else {
-                log.error(ex.exception(1005));
-                throw ex.exception(1001);
+                log.error(ex.exception(2005, Constants.EXCEPTION_TYPE_SNOWFLAKE));
+                throw ex.exception(1001, Constants.EXCEPTION_TYPE_COMMON);
             }
         }
         if (lastTimestamp == timestamp) {
@@ -142,21 +128,21 @@ public class SnowFlakeService extends AbstractIDGenerate {
         }
         lastTimestamp = timestamp;
         long id = ((timestamp - startTime) << offsetTimestamp) | (machineID << machineIdOffset) | sequence;
-        if (log.isInfoEnabled()) log.info(Constants.LOG_PREFIX_PLACEHOLDER_MODE, "雪花 ID = " + id);
+        if (log.isInfoEnabled()) log.info(Constants.LOG_PREFIX_PLACEHOLDER_MODE, "snowflake id = " + id);
         return id;
     }
 
     /**
-     * 获取当前时间戳
+     * gets the current timestamp
      *
      * @return long
      */
-    private long ct() {
+    private long genTime() {
         return System.currentTimeMillis();
     }
 
     /**
-     * 判断当前时间戳是否合法
+     * determines whether the current timestamp is valid
      *
      * @param timestamp
      * @return boolean
@@ -166,15 +152,40 @@ public class SnowFlakeService extends AbstractIDGenerate {
     }
 
     /**
-     * 自旋直到当前时间戳>上一次时间戳并返回
+     * until the current timestamp is greater than the last timestamp
      *
      * @return long
      */
     private long nextTimestamp() {
-        long timestamp = ct();
+        long timestamp = genTime();
         while (timestamp <= lastTimestamp) {
-            timestamp = ct();
+            timestamp = genTime();
         }
         return timestamp;
+    }
+
+    /**
+     * verify that the machine id is valid
+     */
+    private void verifyMidIsValid() {
+        if (!midService.midIsValid()) {
+            log.error(ex.exception(2002, Constants.EXCEPTION_TYPE_SNOWFLAKE));
+            midService.init();
+            machineID = midService.getMachineID();
+            if (log.isInfoEnabled())
+                log.info(Constants.LOG_PREFIX_PLACEHOLDER_MODE, "rebuild machine id = " + machineID.toString());
+            midInScope();
+            throw ex.exception(1001, Constants.EXCEPTION_TYPE_COMMON);
+        }
+    }
+
+    /**
+     * check if the machine id is in range
+     */
+    private void midInScope() {
+        if (-1 == machineID) {
+            log.error(ex.exception(2001, Constants.EXCEPTION_TYPE_SNOWFLAKE));
+            throw ex.exception(1001, Constants.EXCEPTION_TYPE_COMMON);
+        }
     }
 }

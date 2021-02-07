@@ -1,7 +1,5 @@
 package com.twotrance.alone.common;
 
-import java.io.File;
-
 /**
  * Constants
  *
@@ -11,28 +9,33 @@ import java.io.File;
  */
 public class Constants {
     /**
-     * 日志前缀占位模板
+     * log prefix placeholder template
      */
     public final static String LOG_PREFIX_PLACEHOLDER_MODE = "=> {}";
 
     /**
-     * 机器ID在Redis中的根键
+     * machine id information key
      */
     public final static String HASH_MACHINE_ID = "ALONE:HASH_MACHINE_ID";
 
     /**
-     * 机器ID使用情况位图键
-     */
-    public final static String BM_MACHINE_ID_USAGE = "ALONE:BM_MACHINE_ID_USAGE";
-
-    /**
-     * 机器ID本地存储路径
-     */
-    public final static String MACHINE_ID_LOCAL_STORE_PATH = System.getProperty("java.io.tmpdir") + File.separator + "/module_alone/machine_ids/machine-{-}.properties";
-
-    /**
-     * Redis机器ID信息锁
+     * machine id information lock
      */
     public final static String HASH_MACHINE_LOCK = "ALONE:HASH_MACHINE_LOCK";
+
+    /**
+     * common exception type
+     */
+    public final static int EXCEPTION_TYPE_COMMON = 1;
+
+    /**
+     * self-incrementing id exception type
+     */
+    public final static int EXCEPTION_TYPE_AUTO = 2;
+
+    /**
+     * snowflake ID exception type
+     */
+    public final static int EXCEPTION_TYPE_SNOWFLAKE = 3;
 
 }

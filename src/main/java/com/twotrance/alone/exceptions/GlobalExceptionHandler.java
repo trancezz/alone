@@ -30,12 +30,11 @@ public class GlobalExceptionHandler {
     /**
      * 未知异常
      *
-     * @param e 异常
      * @return ResponseEntity
      */
     @ExceptionHandler(Exception.class)
-    public ResponseEntity exception(Exception e) {
-        return new ResponseEntity(JSONUtil.createObj().putOnce("code", 500).putOnce("message", e.getMessage()).toStringPretty(), HttpStatus.valueOf(500));
+    public ResponseEntity exception() {
+        return new ResponseEntity(JSONUtil.createObj().putOnce("code", 1000).putOnce("message", "unknown exception").toStringPretty(), HttpStatus.valueOf(500));
     }
 
 }

@@ -1,5 +1,6 @@
 package com.twotrance.alone.config;
 
+import com.twotrance.alone.common.Constants;
 import com.twotrance.alone.common.utils.MessageUtil;
 import com.twotrance.alone.exceptions.ServerCommonException;
 import lombok.Getter;
@@ -25,14 +26,28 @@ public class ExceptionMsgProperties {
 
     @Getter
     @Setter
-    private Map<Long, String> errors = new HashMap<>();
+    private Map<Long, String> commons = new HashMap<>();
 
-    public ServerCommonException exception(long code) {
-        return new ServerCommonException(code, errors.get(code));
+    @Getter
+    @Setter
+    private Map<Long, String> snowflakes = new HashMap<>();
+
+    @Getter
+    @Setter
+    private Map<Long, String> autos = new HashMap<>();
+
+    public ServerCommonException exception(long code, int type) {
+        return exception(code, type, null);
     }
 
-    public ServerCommonException exception(long code, String... params) {
-        return new ServerCommonException(code, MessageUtil.format(errors.get(code), params));
+    public ServerCommonException exception(long code, int type, String params) {
+        if (Constants.EXCEPTION_TYPE_AUTO == type)
+            return new ServerCommonException(code, MessageUtil.format(autos.get(code), params));
+        if (Constants.EXCEPTION_TYPE_SNOWFLAKE == type)
+            return new ServerCommonException(code, MessageUtil.format(snowflakes.get(code), params));
+        if (Constants.EXCEPTION_TYPE_COMMON == type)
+            return new ServerCommonException(code, MessageUtil.format(commons.get(code), params));
+        return new ServerCommonException(1000, "unknown exception");
     }
 
 }

@@ -47,4 +47,4 @@ spring:
     name: alone
 
 server:
-  port: 8801
+  port: 8802

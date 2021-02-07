@@ -1,15 +1,12 @@
 package com.twotrance.alone.service.snowflake;
 
 import cn.hutool.core.collection.ListUtil;
-import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.net.NetUtil;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.RandomUtil;
-import cn.hutool.core.util.StrUtil;
 import cn.hutool.log.Log;
 import cn.hutool.log.LogFactory;
-import cn.hutool.setting.dialect.Props;
 import com.twotrance.alone.common.Constants;
 import com.twotrance.alone.common.utils.EnThread;
 import com.twotrance.alone.config.ExceptionMsgProperties;
@@ -21,114 +18,88 @@ import org.springframework.core.env.Environment;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.io.File;
-import java.nio.charset.Charset;
 import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-
 /**
- * MachineIDInitService
+ * MidService
  *
  * @author trance
- * @description machineID init service
+ * @description machine id service
  * @date 2021/1/29
  */
 @Service
-public class MachineIDInitService {
+public class MidService {
 
     /**
-     * 日志记录器
+     * logger
      */
     private static final Log log = LogFactory.get();
 
     /**
-     * RedisTemplate
+     * redis template
      */
     private RedisTemplate redisTemplate;
 
     /**
-     * 本机IP地址
+     * local ip address
      */
     private final String ip = NetUtil.getLocalhostStr();
 
     /**
-     * 当前初始化后的机器ID
+     * machine id
      */
     @Getter
     private Long machineID;
 
     /**
-     * 获取当前项目端口号
+     * application port
      */
     private Integer port;
 
     /**
-     * 当前机器IP与端口字符串
+     * local ip address and application port
      */
     private String ipAndPort;
 
     /**
-     * 本地机场ID文件
-     */
-    private File machineIDLocalFile;
-
-    /**
-     * 异常信息配置文件
+     * exception information profile
      */
     private ExceptionMsgProperties ex;
+
     /**
-     * 机器ID信息分布式锁
+     * distributed locking of machine ID information
      */
+    @Getter
     private RLock lock;
 
     /**
-     * 标识当前机器ID是否失效
-     */
-    @Getter
-    private volatile boolean failure = false;
-
-
-    /**
-     * 构造函数
+     * constructor
      *
-     * @param redisTemplate          Redis模板
-     * @param environment            SpringBoot环境变量
-     * @param exceptionMsgProperties 异常信息配置
-     * @explain 如果获取不到端口号则抛出异常, 因为端口号是必须的
-     * @explain 这里的机器码我把它默认为App的端口号, 同样最多可部署1024个App
-     * @explain init() 初始化机器ID
+     * @param redisTemplate          redis template
+     * @param environment            environment variable
+     * @param exceptionMsgProperties exception information profile
      */
-    public MachineIDInitService(RedisTemplate redisTemplate, Environment environment, RedissonClient redissonClient, ExceptionMsgProperties exceptionMsgProperties) {
+    public MidService(RedisTemplate redisTemplate, Environment environment, RedissonClient redissonClient, ExceptionMsgProperties exceptionMsgProperties) {
         this.redisTemplate = redisTemplate;
-        lock = redissonClient.getLock(Constants.HASH_MACHINE_LOCK);
+        this.lock = redissonClient.getLock(Constants.HASH_MACHINE_LOCK);
         this.ex = exceptionMsgProperties;
-        String portString = environment.getProperty("server.port");
-        if (StrUtil.isBlank(portString)) {
-            log.error(ex.exception(1006));
-            throw ex.exception(1001);
+        this.port = environment.getProperty("server.port", Integer.class);
+        if (ObjectUtil.isEmpty(port)) {
+            log.error(ex.exception(2006, Constants.EXCEPTION_TYPE_SNOWFLAKE));
+            throw ex.exception(1001, Constants.EXCEPTION_TYPE_COMMON);
         }
-        port = Integer.valueOf(portString);
         init();
     }
 
     /**
-     * 机器ID初始化工作
-     *
-     * @explain initMachineIDUsageMap() 初始化机器ID使用情况列表
-     * @explain ipAndPort IP地址与端口号组成当前App的标识键
-     * @explain machineIDLocalFile 机器ID存储的本地文件
-     * @expalin 如果当前Redis中不存在此Hash, 证明这是部署的第一个App, 所以应该去初始化它, 以IP地址和Port为键和生成的机器ID为值存入RedisHash中
-     * 如果存在此Hash则通过IP地址和Port为键去获取Hash中存放的机器ID实例(这里为CurrentPoint), 这里分2种情况, 第一种是存在机器ID实例, 取出后先检查时间戳
-     * 是否合理, 当前时间戳大于存储的时间戳, 如果当前时间戳小于取出的时间戳那么证明出现时间回拨的现象抛出异常, 如果时间戳合理, 那么就取出当前实例中的机器ID作为机器ID
-     * 如果此Hash不存在相应的机器ID实例, 那么就用此IP地址和Port初始化此机器ID实例
+     * the machine id is initialized
      */
     public void init() {
         ipAndPort = ip + "-" + port;
-        machineIDLocalFile = new File(Constants.MACHINE_ID_LOCAL_STORE_PATH.replace("{-}", ipAndPort));
         if (!hasMidInfosKey()) {
             machineID = genMid();
             if (-1L == machineID)
@@ -148,14 +119,15 @@ public class MachineIDInitService {
         }
         if (genTime() < midInfo.getTimestamp()) {
             machineID = -1L;
-            return;
+            log.error(ex.exception(2007, Constants.EXCEPTION_TYPE_SNOWFLAKE));
+            throw ex.exception(1001, Constants.EXCEPTION_TYPE_COMMON);
         }
         machineID = midInfo.getMid();
         loopUpdateMidInfo();
     }
 
     /**
-     * 判断Redis中是否存在机器ID信息键
+     * whether the machine id information key exists
      *
      * @return boolean
      */
@@ -164,7 +136,7 @@ public class MachineIDInitService {
     }
 
     /**
-     * 毫秒转分钟
+     * milliseconds per minute
      *
      * @param ms
      * @return int
@@ -174,7 +146,7 @@ public class MachineIDInitService {
     }
 
     /**
-     * 生成系统当前时间, 单位毫秒
+     * gets the current timestamp
      *
      * @return long
      */
@@ -183,7 +155,7 @@ public class MachineIDInitService {
     }
 
     /**
-     * 生成机器ID信息
+     * generate machine id information
      *
      * @return MidInfo
      */
@@ -192,26 +164,26 @@ public class MachineIDInitService {
     }
 
     /**
-     * 将对应的机器ID信息取出
+     * get the machine id information from redis
+     *
+     * @return MidInfo
      */
     private MidInfo midInfo4Redis() {
-        return (MidInfo) redisTemplate.opsForHash().get(Constants.HASH_MACHINE_ID, ipAndPort);
+        Object object = redisTemplate.opsForHash().get(Constants.HASH_MACHINE_ID, ipAndPort);
+        if (ObjectUtil.isEmpty(object))
+            return null;
+        return (MidInfo) object;
     }
 
     /**
-     * 将机器ID数据存入Redis中
+     * store the machine id information in redis and resets the current machine id state
      */
     private void putMidInfo2Redis() {
-        try {
-            redisTemplate.opsForHash().put(Constants.HASH_MACHINE_ID, ipAndPort, genNodeInfo());
-            failure = false;
-        } catch (Exception e) {
-            failure = true;
-        }
+        redisTemplate.opsForHash().put(Constants.HASH_MACHINE_ID, ipAndPort, genNodeInfo());
     }
 
     /**
-     * 获取Redis中所有的机器ID信息, 并且删除Redis中无效的机器ID信息, 条件是时间差大于1分钟
+     * retrieve all machine id information in redis, and delete the invalid machine id information in redis, if the time difference is greater than 1 minute
      *
      * @return List<MidInfo>
      */
@@ -229,22 +201,21 @@ public class MachineIDInitService {
             midInfoMap.remove(midInfo.getIpAndPort());
             redisTemplate.opsForHash().delete(Constants.HASH_MACHINE_ID, midInfo.getIpAndPort());
         });
-
         lock.unlock();
         return midInfoMap.values().parallelStream().collect(Collectors.toList());
     }
 
     /**
-     * 获取已经使用的机器ID
+     * gets the machine id that is already in use
      *
-     * @return int[]
+     * @return List<Long>
      */
     private List<Long> inUseMids() {
         return midInfos4Redis().parallelStream().map(MidInfo::getMid).collect(Collectors.toList());
     }
 
     /**
-     * 生成机器ID, 防止栈溢出所以未用递归
+     * generate machine IDs to prevent stack overflow so no recursion is used
      *
      * @return long
      */
@@ -263,14 +234,21 @@ public class MachineIDInitService {
     }
 
     /**
-     * 更新机器ID信息单线程池
+     * update machine id information single thread pool
      */
     private ScheduledExecutorService updateMidInfoThreadPool = Executors.newSingleThreadScheduledExecutor(r -> new EnThread(r).daemon(true));
 
     /**
-     * 每3秒钟更新一次机器ID信息
+     * the machine id information is updated every 3 seconds
      */
     private void loopUpdateMidInfo() {
         updateMidInfoThreadPool.scheduleAtFixedRate(this::putMidInfo2Redis, 3L, 3L, TimeUnit.SECONDS);
+    }
+
+    /**
+     * rebuild the machine when the machine id expires
+     */
+    public boolean midIsValid() {
+        return midInfo4Redis() != null ? true : false;
     }
 }
