@@ -1,21 +1,21 @@
 package com.twotrance.alone.service.snowflake;
 
-import cn.hutool.core.collection.ListUtil;
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.net.NetUtil;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.RandomUtil;
 import cn.hutool.log.Log;
 import cn.hutool.log.LogFactory;
-import com.twotrance.alone.common.Constants;
+import com.twotrance.alone.common.constants.Constants;
 import com.twotrance.alone.common.utils.EnThread;
-import com.twotrance.alone.config.ExceptionMsgProperties;
+import com.twotrance.alone.config.ExceptionHandler;
 import com.twotrance.alone.model.snowflake.MidInfo;
 import lombok.Getter;
+import org.redisson.api.LocalCachedMapOptions;
 import org.redisson.api.RLock;
+import org.redisson.api.RMap;
 import org.redisson.api.RedissonClient;
 import org.springframework.core.env.Environment;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -38,11 +38,6 @@ public class MidService {
      * logger
      */
     private static final Log log = LogFactory.get();
-
-    /**
-     * redis template
-     */
-    private RedisTemplate redisTemplate;
 
     /**
      * local ip address
@@ -68,7 +63,7 @@ public class MidService {
     /**
      * exception information profile
      */
-    private ExceptionMsgProperties ex;
+    private ExceptionHandler ex;
 
     /**
      * distributed locking of machine ID information
@@ -77,20 +72,28 @@ public class MidService {
     private RLock lock;
 
     /**
+     * redisson client
+     */
+    private RedissonClient redissonClient;
+
+    /**
+     * machine map
+     */
+    private RMap<String, MidInfo> machineMap;
+
+    /**
      * constructor
      *
-     * @param redisTemplate          redis template
-     * @param environment            environment variable
-     * @param exceptionMsgProperties exception information profile
+     * @param environment      environment variable
+     * @param exceptionHandler exception information profile
      */
-    public MidService(RedisTemplate redisTemplate, Environment environment, RedissonClient redissonClient, ExceptionMsgProperties exceptionMsgProperties) {
-        this.redisTemplate = redisTemplate;
-        this.lock = redissonClient.getLock(Constants.HASH_MACHINE_LOCK);
-        this.ex = exceptionMsgProperties;
+    public MidService(Environment environment, RedissonClient redissonClient, ExceptionHandler exceptionHandler) {
+        this.redissonClient = redissonClient;
+        this.ex = exceptionHandler;
         this.port = environment.getProperty("server.port", Integer.class);
         if (ObjectUtil.isEmpty(port)) {
-            log.error(ex.exception(2006, Constants.EXCEPTION_TYPE_SNOWFLAKE));
-            throw ex.exception(1001, Constants.EXCEPTION_TYPE_COMMON);
+            log.error(ex.exception(2006));
+            throw ex.exception(1001);
         }
         init();
     }
@@ -100,7 +103,17 @@ public class MidService {
      */
     public void init() {
         ipAndPort = ip + "-" + port;
-        if (!hasMidInfosKey()) {
+        // local cache map options
+        LocalCachedMapOptions localCachedMapOptions = LocalCachedMapOptions.defaults()
+                .evictionPolicy(LocalCachedMapOptions.EvictionPolicy.LFU)
+                .cacheSize(500)
+                .reconnectionStrategy(LocalCachedMapOptions.ReconnectionStrategy.LOAD)
+                .syncStrategy(LocalCachedMapOptions.SyncStrategy.UPDATE)
+                .timeToLive(3600000)
+                .maxIdle(3600000);
+        machineMap = redissonClient.getLocalCachedMap(Constants.HASH_MACHINE_ID, localCachedMapOptions);
+        lock = machineMap.getLock(Constants.HASH_MACHINE_LOCK);
+        if (MapUtil.isEmpty(machineMap)) {
             machineID = genMid();
             if (-1L == machineID)
                 return;
@@ -119,20 +132,11 @@ public class MidService {
         }
         if (genTime() < midInfo.getTimestamp()) {
             machineID = -1L;
-            log.error(ex.exception(2007, Constants.EXCEPTION_TYPE_SNOWFLAKE));
-            throw ex.exception(1001, Constants.EXCEPTION_TYPE_COMMON);
+            log.error(ex.exception(2007));
+            throw ex.exception(1001);
         }
         machineID = midInfo.getMid();
         loopUpdateMidInfo();
-    }
-
-    /**
-     * whether the machine id information key exists
-     *
-     * @return boolean
-     */
-    private boolean hasMidInfosKey() {
-        return redisTemplate.hasKey(Constants.HASH_MACHINE_ID);
     }
 
     /**
@@ -141,7 +145,7 @@ public class MidService {
      * @param ms
      * @return int
      */
-    private int ms2Mi(long ms) {
+    private Integer ms2Mi(long ms) {
         return Long.valueOf(ms / 1000 / 60).intValue();
     }
 
@@ -150,7 +154,7 @@ public class MidService {
      *
      * @return long
      */
-    private long genTime() {
+    private Long genTime() {
         return System.currentTimeMillis();
     }
 
@@ -169,7 +173,7 @@ public class MidService {
      * @return MidInfo
      */
     private MidInfo midInfo4Redis() {
-        Object object = redisTemplate.opsForHash().get(Constants.HASH_MACHINE_ID, ipAndPort);
+        Object object = machineMap.get(ipAndPort);
         if (ObjectUtil.isEmpty(object))
             return null;
         return (MidInfo) object;
@@ -179,58 +183,50 @@ public class MidService {
      * store the machine id information in redis and resets the current machine id state
      */
     private void putMidInfo2Redis() {
-        redisTemplate.opsForHash().put(Constants.HASH_MACHINE_ID, ipAndPort, genNodeInfo());
+        machineMap.fastPut(ipAndPort, genNodeInfo());
     }
 
     /**
      * retrieve all machine id information in redis, and delete the invalid machine id information in redis, if the time difference is greater than 1 minute
-     *
-     * @return List<MidInfo>
-     */
-    private List<MidInfo> midInfos4Redis() {
-        lock.lock();
-        Map<String, MidInfo> midInfoMap = redisTemplate.opsForHash().entries(Constants.HASH_MACHINE_ID);
-        if (MapUtil.isEmpty(midInfoMap)) {
-            lock.unlock();
-            return ListUtil.list(false);
-        }
-        List<MidInfo> invalidMidInfos = midInfoMap.values().parallelStream()
-                .filter(midInfo -> ms2Mi(genTime() - midInfo.getTimestamp()) > 1)
-                .collect(Collectors.toList());
-        invalidMidInfos.parallelStream().forEach(midInfo -> {
-            midInfoMap.remove(midInfo.getIpAndPort());
-            redisTemplate.opsForHash().delete(Constants.HASH_MACHINE_ID, midInfo.getIpAndPort());
-        });
-        lock.unlock();
-        return midInfoMap.values().parallelStream().collect(Collectors.toList());
-    }
-
-    /**
-     * gets the machine id that is already in use
-     *
-     * @return List<Long>
-     */
-    private List<Long> inUseMids() {
-        return midInfos4Redis().parallelStream().map(MidInfo::getMid).collect(Collectors.toList());
-    }
-
-    /**
      * generate machine IDs to prevent stack overflow so no recursion is used
      *
-     * @return long
+     * @return Long
      */
-    private long genMid() {
-        lock.lock();
-        List<Long> inUseMids = inUseMids();
-        if (inUseMids.size() >= 1024) {
-            lock.unlock();
-            return -1;
+    private Long genMid() {
+        Boolean locked;
+        try {
+            locked = lock.tryLock(1, TimeUnit.SECONDS);
+            if (locked) {
+                if (null == machineMap) {
+                    if (lock.isHeldByCurrentThread()) {
+                        lock.unlock();
+                    }
+                    return -1L;
+                }
+                machineMap.values().parallelStream()
+                        .filter(midInfo -> ms2Mi(genTime() - midInfo.getTimestamp()) > 1)
+                        .parallel()
+                        .forEach(midInfo -> machineMap.fastRemove(midInfo.getIpAndPort()));
+                List<Long> inUseMids = machineMap.values().parallelStream().map(MidInfo::getMid).collect(Collectors.toList());
+                if (inUseMids.size() >= 1024) {
+                    return -1L;
+                }
+                Long mid = RandomUtil.randomLong(1024);
+                while (inUseMids.contains(mid))
+                    mid = RandomUtil.randomLong(1024);
+                if (lock.isHeldByCurrentThread()) {
+                    lock.unlock();
+                }
+                return mid.longValue();
+            }
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+            ex.exception(2008);
         }
-        Long mid = RandomUtil.randomLong(1024);
-        while (inUseMids.contains(mid))
-            mid = RandomUtil.randomLong(1024);
-        lock.unlock();
-        return mid.longValue();
+        return genMid();
     }
 
     /**
@@ -248,7 +244,7 @@ public class MidService {
     /**
      * rebuild the machine when the machine id expires
      */
-    public boolean midIsValid() {
+    public Boolean midIsValid() {
         return midInfo4Redis() != null ? true : false;
     }
 }

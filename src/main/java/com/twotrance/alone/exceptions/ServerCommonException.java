@@ -13,8 +13,12 @@ public class ServerCommonException extends RuntimeException {
     @Getter
     private long code;
 
+    @Getter
+    private String message;
+
     public ServerCommonException(long code, String message) {
         super(message);
         this.code = code;
+        this.message = message;
     }
 }

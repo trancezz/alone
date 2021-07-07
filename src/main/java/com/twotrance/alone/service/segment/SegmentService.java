@@ -3,18 +3,18 @@ package com.twotrance.alone.service.segment;
 import cn.hutool.core.collection.CollStreamUtil;
 import cn.hutool.core.collection.CollUtil;
 
+import cn.hutool.core.util.StrUtil;
 import cn.hutool.log.Log;
 import cn.hutool.log.LogFactory;
-import com.twotrance.alone.common.Constants;
+import com.twotrance.alone.common.constants.Constants;
+import com.twotrance.alone.config.ExceptionHandler;
+import com.twotrance.alone.model.segment.Paragraph;
 import com.twotrance.alone.service.AbstractIDGenerate;
 import com.twotrance.alone.common.utils.EnThread;
-import com.twotrance.alone.config.ExceptionMsgProperties;
-import com.twotrance.alone.model.segment.Alloc;
 import com.twotrance.alone.model.segment.Segment;
 import com.twotrance.alone.model.segment.SegmentBuffer;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
 import java.util.*;
 import java.util.concurrent.*;
@@ -27,6 +27,7 @@ import java.util.function.BiConsumer;
  * @description segment service
  */
 @Service
+@Transactional
 public class SegmentService extends AbstractIDGenerate {
 
     /**
@@ -35,24 +36,24 @@ public class SegmentService extends AbstractIDGenerate {
     Log log = LogFactory.get(this.getClass());
 
     /**
-     * alloc service
+     * paragraph service
      */
-    private AllocService allocService;
+    private ParagraphService paragraphService;
 
     /**
      * exception information profile
      */
-    private ExceptionMsgProperties ex;
+    private ExceptionHandler ex;
 
     /**
      * constructor
      *
-     * @param allocService             alloc service
-     * @param exceptionMsgProperties() exception information profile
+     * @param paragraphService paragraph service
+     * @param exceptionHandler exception information profile
      */
-    public SegmentService(AllocService allocService, ExceptionMsgProperties exceptionMsgProperties) {
-        this.allocService = allocService;
-        this.ex = exceptionMsgProperties;
+    public SegmentService(ParagraphService paragraphService, ExceptionHandler exceptionHandler) {
+        this.paragraphService = paragraphService;
+        this.ex = exceptionHandler;
         init();
     }
 
@@ -80,12 +81,15 @@ public class SegmentService extends AbstractIDGenerate {
      * update the cache
      */
     private void updateCache() {
-        Set<String> bizKeys = CollStreamUtil.toSet(allocService.bizKeys(), bizKey -> bizKey);
-        if (CollUtil.isEmpty(bizKeys))
+        Set<String> models = CollStreamUtil.toSet(paragraphService.models(), model -> model);
+        if (CollUtil.isEmpty(models))
             return;
-        checkCache((bs, cs) -> CollUtil.subtractToList(bs, cs).parallelStream().forEach(bizKey -> cache.put(bizKey, new SegmentBuffer(bizKey))),
-                (bs, cs) -> CollUtil.subtractToList(cs, bs).parallelStream().forEach(bizKey -> cache.remove(bizKey)),
-                bizKeys, cache.keySet());
+        checkCache(
+                (bs, cs) -> CollUtil.subtractToList(bs, cs)
+                        .parallelStream().forEach(model -> cache.put(model, new SegmentBuffer(model))),
+                (bs, cs) -> CollUtil.subtractToList(cs, bs)
+                        .parallelStream().forEach(model -> cache.remove(model)),
+                models, cache.keySet());
     }
 
     /**
@@ -115,24 +119,81 @@ public class SegmentService extends AbstractIDGenerate {
     /**
      * gets the generated ID and initializes the uninitialized segment buffer
      *
-     * @param bizKey biz key
+     * @param model model
      * @return long
      */
     @Override
-    public long id(String bizKey) {
-        SegmentBuffer segmentBuffer;
-        if (cacheInit && cache.containsKey(bizKey)) {
-            segmentBuffer = cache.get(bizKey);
+    public Long id(String model, String phone, String appKey) {
+        validAppKey(phone, appKey);
+        if (StrUtil.isEmpty(model)) throwException(3001);
+        if (!paragraphService.hasModel(phone, model)) throwException(3001);
+        if (cacheInit && cache.containsKey(model)) {
+            SegmentBuffer segmentBuffer = cache.get(model);
             segmentBuffer.getLock().lock();
-            if (!segmentBuffer.isInit()) {
-                updateSegment(bizKey, segmentBuffer, segmentBuffer.current(), 0);
-                segmentBuffer.setInit(true);
+            if (!segmentBuffer.getInit()) {
+                updateSegment(phone, model, segmentBuffer, segmentBuffer.current());
             }
             segmentBuffer.getLock().unlock();
-            return produceID(segmentBuffer);
+            return produceID(phone, segmentBuffer);
         }
-        log.error(ex.exception(3001, Constants.EXCEPTION_TYPE_AUTO));
-        throw ex.exception(3001, Constants.EXCEPTION_TYPE_AUTO);
+        log.error(getException(3001));
+        throwException(3001);
+        return -1L;
+    }
+
+    /**
+     * segment update
+     *
+     * @param model
+     * @param segmentBuffer
+     * @param segment
+     */
+    public void updateSegment(String phone, String model, SegmentBuffer segmentBuffer, Segment segment) {
+        try {
+            Paragraph paragraph = paragraphService.model(phone, model);
+            if (!segmentBuffer.getInit()) {
+                segment.setMax(paragraph.getMax());
+                segment.setLength(paragraph.getLength());
+                segment.getValue().set(paragraph.getMax() - paragraph.getLength());
+                segmentBuffer.setUpdateTimestamp(System.currentTimeMillis());
+                paragraphService.updateOfMax(paragraph.getLength(), model, paragraph.getMax());
+            } else {
+                paragraphService.updateOfMax(calcNextLength(segmentBuffer.getUpdateTimestamp(), paragraph.getLength()), model, paragraph.getMax());
+                paragraph = paragraphService.model(phone, model);
+                segment.getValue().set(paragraph.getMax() - paragraph.getLength());
+                segment.setLength(paragraph.getLength());
+                segment.setMax(paragraph.getMax());
+                segmentBuffer.setUpdateTimestamp(System.currentTimeMillis());
+            }
+            segmentBuffer.setInit(true);
+        } catch (Exception e) {
+            e.printStackTrace();
+            log.error(getException(3003));
+            throwException(1001);
+        }
+    }
+
+    /**
+     * calc next length
+     *
+     * @param updateTimestamp
+     * @param length
+     * @return
+     */
+    public Long calcNextLength(Long updateTimestamp, Long length) {
+        long accordingTime = 15 * 60 * 1000L;
+        long timeDiff = System.currentTimeMillis() - updateTimestamp;
+        long nextLength = 0;
+        if (timeDiff < accordingTime) {
+            if (length < 100000) {
+                nextLength = length * 2;
+            }
+        } else if (timeDiff < accordingTime * 2) {
+            nextLength = length;
+        } else {
+            nextLength = length / 2;
+        }
+        return nextLength;
     }
 
     /**
@@ -146,22 +207,22 @@ public class SegmentService extends AbstractIDGenerate {
      * @param segmentBuffer segmentBuffer
      * @return long
      */
-    private long produceID(SegmentBuffer segmentBuffer) {
+    private Long produceID(String phone, SegmentBuffer segmentBuffer) {
         try {
             segmentBuffer.getLock().lock();
-            updateNextSegment(segmentBuffer);
+            updateNextSegment(phone, segmentBuffer);
             Segment segment = segmentBuffer.current();
             long id = segment.getValue().get();
-            if (!verifyMaxIdIsValid(id, segment.getMaxId())) {
-                if (!segmentBuffer.isSwitch()) {
-                    segmentBuffer.setSwitch(true);
+            if (!verifyMaxIdIsValid(id, segment.getMax())) {
+                if (!segmentBuffer.getSwitched()) {
+                    segmentBuffer.setSwitched(true);
                     switchThreadPool.execute(() -> {
                         try {
                             segmentBuffer.getLock().lock();
                             segmentBuffer.switchCurrent();
                             segmentBuffer.setNextReady(false);
                             segmentBuffer.getCondition().signalAll();
-                            segmentBuffer.setSwitch(false);
+                            segmentBuffer.setSwitched(false);
                         } finally {
                             segmentBuffer.getLock().unlock();
                         }
@@ -171,78 +232,32 @@ public class SegmentService extends AbstractIDGenerate {
             }
             segment = segmentBuffer.current();
             id = segment.getValue().get();
-            if (verifyMaxIdIsValid(id, segment.getMaxId())) {
+            if (verifyMaxIdIsValid(id, segment.getMax())) {
                 id = segment.getValue().getAndIncrement();
                 if (log.isInfoEnabled()) log.info(Constants.LOG_PREFIX_PLACEHOLDER_MODE, "auto id = " + id);
                 return id;
             }
         } catch (InterruptedException e) {
-            log.error(ex.exception(3002, Constants.EXCEPTION_TYPE_AUTO));
-            throw ex.exception(1001, Constants.EXCEPTION_TYPE_COMMON);
+            log.error(getException(3002));
+            throwException(1001);
         } finally {
             segmentBuffer.getLock().unlock();
         }
-        return produceID(segmentBuffer);
+        return produceID(phone, segmentBuffer);
     }
 
-    /**
-     * update segment
-     *
-     * @param bizKey  biz key
-     * @param segment segment
-     */
-    @Transactional
-    public void updateSegment(String bizKey, SegmentBuffer segmentBuffer, Segment segment, int lastStep) {
-        try {
-            Alloc alloc;
-            if (!segmentBuffer.isInit() || segmentBuffer.getUpdateTimestamp() == 0) {
-                allocService.uMaxId(bizKey);
-                alloc = allocService.alloc(bizKey);
-                segment.setMaxId(alloc.getMaxId());
-                segment.setStep(alloc.getStep());
-                segment.getValue().set(alloc.getMaxId() - alloc.getStep());
-                segmentBuffer.setUpdateTimestamp(System.currentTimeMillis());
-            } else {
-                long consumeTime = 15 * 60 * 1000L;
-                long duration = System.currentTimeMillis() - segmentBuffer.getUpdateTimestamp();
-                int nextStep = 0;
-                if (duration < consumeTime) {
-                    if (segment.getStep() * 2 < 100000) {
-                        nextStep = lastStep * 2;
-                    }
-                } else if (duration < (15 * 60 * 1000L) * 2) {
-                    nextStep = lastStep;
-                } else {
-                    nextStep = lastStep / 2;
-                }
-                Alloc nextAlloc = new Alloc();
-                nextAlloc.setBizKey(bizKey);
-                nextAlloc.setStep(nextStep);
-                allocService.uMaxIdByCustom(bizKey, nextStep);
-                Alloc updatedAlloc = allocService.alloc(bizKey);
-                segment.getValue().set(updatedAlloc.getMaxId() - nextStep);
-                segment.setStep(updatedAlloc.getStep());
-                segment.setMaxId(updatedAlloc.getMaxId());
-                segmentBuffer.setUpdateTimestamp(System.currentTimeMillis());
-            }
-        } catch (Exception e) {
-            log.error(ex.exception(3003, Constants.EXCEPTION_TYPE_AUTO));
-            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
-            throw ex.exception(1001, Constants.EXCEPTION_TYPE_COMMON);
-        }
-    }
 
     /**
      * update the next segment
      *
      * @param segmentBuffer segment buffer
      */
-    private void updateNextSegment(SegmentBuffer segmentBuffer) {
+    private void updateNextSegment(String phone, SegmentBuffer segmentBuffer) {
         Segment segment = segmentBuffer.current();
-        boolean surpass = segment.getMaxId() - segment.getValue().get() < 0.9 * segment.getStep();
-        if (!segmentBuffer.isNextReady() && surpass) {
+        boolean surpass = segment.getMax() - segment.getValue().get() < 0.9 * segment.getLength();
+        if (!segmentBuffer.getNextReady() && surpass) {
             Segment nextSegment = segmentBuffer.nextSegment();
-            updateSegment(segmentBuffer.getBizKey(), segmentBuffer, nextSegment, segment.getStep());
+            updateSegment(phone, segmentBuffer.getModel(), segmentBuffer, nextSegment);
             segmentBuffer.setNextReady(true);
         }
     }

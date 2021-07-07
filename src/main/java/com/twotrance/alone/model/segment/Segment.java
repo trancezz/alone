@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class Segment {
 
     private AtomicLong value = new AtomicLong(1);
-    private volatile long maxId;
-    private volatile int step;
+    private volatile Long max;
+    private volatile Long length;
 
 }

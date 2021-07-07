@@ -3,9 +3,9 @@ package com.twotrance.alone.service.snowflake;
 import cn.hutool.core.util.RandomUtil;
 import cn.hutool.log.Log;
 import cn.hutool.log.LogFactory;
-import com.twotrance.alone.common.Constants;
+import com.twotrance.alone.common.constants.Constants;
+import com.twotrance.alone.config.ExceptionHandler;
 import com.twotrance.alone.service.AbstractIDGenerate;
-import com.twotrance.alone.config.ExceptionMsgProperties;
 import org.springframework.stereotype.Service;
 
 /**
@@ -66,7 +66,7 @@ public class SnowFlakeService extends AbstractIDGenerate {
     /**
      * exception information profile
      */
-    private ExceptionMsgProperties ex;
+    private ExceptionHandler ex;
 
     /**
      * machine id service
@@ -76,16 +76,16 @@ public class SnowFlakeService extends AbstractIDGenerate {
     /**
      * constructor
      *
-     * @param midService             machine id service
-     * @param exceptionMsgProperties exception message properties
+     * @param midService       machine id service
+     * @param exceptionHandler exception message properties
      */
-    public SnowFlakeService(MidService midService, ExceptionMsgProperties exceptionMsgProperties) {
-        this.ex = exceptionMsgProperties;
+    public SnowFlakeService(MidService midService, ExceptionHandler exceptionHandler) {
+        this.ex = exceptionHandler;
         this.midService = midService;
         machineID = midService.getMachineID();
         midInScope();
         if (log.isInfoEnabled())
-            log.info(Constants.LOG_PREFIX_PLACEHOLDER_MODE, "the machine ID has been initialized, machine id = " + machineID.toString());
+            log.info(Constants.LOG_PREFIX_PLACEHOLDER_MODE, "the machine id has been initialized, machine id = " + machineID.toString());
     }
 
     /**
@@ -95,7 +95,8 @@ public class SnowFlakeService extends AbstractIDGenerate {
      * @return long
      */
     @Override
-    public synchronized long id(String bizKey) {
+    public synchronized Long id(String bizKey, String phone, String appKey) {
+        validAppKey(phone, appKey);
         verifyMidIsValid();
         long timestamp = genTime();
         if (legalTime(timestamp)) {
@@ -105,16 +106,16 @@ public class SnowFlakeService extends AbstractIDGenerate {
                     wait(callbackTimeMS << 1);
                     timestamp = genTime();
                     if (legalTime(timestamp)) {
-                        log.error(ex.exception(2003, Constants.EXCEPTION_TYPE_SNOWFLAKE));
-                        throw ex.exception(1001, Constants.EXCEPTION_TYPE_COMMON);
+                        log.error(getException(2003));
+                        throwException(1001);
                     }
                 } catch (InterruptedException e) {
-                    log.error(ex.exception(2004, Constants.EXCEPTION_TYPE_SNOWFLAKE));
-                    throw ex.exception(1001, Constants.EXCEPTION_TYPE_COMMON);
+                    log.error(getException(2004));
+                    throwException(1001);
                 }
             } else {
-                log.error(ex.exception(2005, Constants.EXCEPTION_TYPE_SNOWFLAKE));
-                throw ex.exception(1001, Constants.EXCEPTION_TYPE_COMMON);
+                log.error(getException(2005));
+                throw ex.exception(1001);
             }
         }
         if (lastTimestamp == timestamp) {
@@ -127,7 +128,7 @@ public class SnowFlakeService extends AbstractIDGenerate {
             sequence = RandomUtil.randomInt(101);
         }
         lastTimestamp = timestamp;
-        long id = ((timestamp - startTime) << offsetTimestamp) | (machineID << machineIdOffset) | sequence;
+        Long id = ((timestamp - startTime) << offsetTimestamp) | (machineID << machineIdOffset) | sequence;
         if (log.isInfoEnabled()) log.info(Constants.LOG_PREFIX_PLACEHOLDER_MODE, "snowflake id = " + id);
         return id;
     }
@@ -169,13 +170,13 @@ public class SnowFlakeService extends AbstractIDGenerate {
      */
     private void verifyMidIsValid() {
         if (!midService.midIsValid()) {
-            log.error(ex.exception(2002, Constants.EXCEPTION_TYPE_SNOWFLAKE));
+            log.error(getException(2002));
             midService.init();
             machineID = midService.getMachineID();
             if (log.isInfoEnabled())
                 log.info(Constants.LOG_PREFIX_PLACEHOLDER_MODE, "rebuild machine id = " + machineID.toString());
             midInScope();
-            throw ex.exception(1001, Constants.EXCEPTION_TYPE_COMMON);
+            throwException(1001);
         }
     }
 
@@ -184,8 +185,8 @@ public class SnowFlakeService extends AbstractIDGenerate {
      */
     private void midInScope() {
         if (-1 == machineID) {
-            log.error(ex.exception(2001, Constants.EXCEPTION_TYPE_SNOWFLAKE));
-            throw ex.exception(1001, Constants.EXCEPTION_TYPE_COMMON);
+            log.error(getException(2001));
+            throwException(1001);
         }
     }
 }

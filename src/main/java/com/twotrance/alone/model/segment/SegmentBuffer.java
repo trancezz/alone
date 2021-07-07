@@ -1,5 +1,6 @@
 package com.twotrance.alone.model.segment;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -17,23 +18,25 @@ import java.util.concurrent.locks.ReentrantLock;
 @Getter
 public class SegmentBuffer {
 
-    private String bizKey;
+    private String model;
     private Segment[] segments;
-    private volatile int currentIndex;
-    private volatile boolean nextReady;
-    private volatile boolean init;
-    private volatile boolean isSwitch;
+    private volatile Integer currentIndex;
+    private volatile Boolean nextReady;
+    private volatile Boolean init;
+    private volatile Boolean switched;
+    private volatile Long updateTimestamp;
+    @JsonIgnore
     private final ReentrantLock lock;
+    @JsonIgnore
     private final Condition condition;
-    private volatile long updateTimestamp;
 
-    public SegmentBuffer(String bizKey) {
-        this.bizKey = bizKey;
+    public SegmentBuffer(String model) {
+        this.model = model;
         this.segments = new Segment[]{new Segment(), new Segment()};
         this.currentIndex = 0;
         this.nextReady = false;
         this.init = false;
-        this.isSwitch = false;
+        this.switched = false;
         this.lock = new ReentrantLock();
         this.condition = this.lock.newCondition();
     }

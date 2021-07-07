@@ -6,7 +6,7 @@ import java.text.MessageFormat;
  * MessageUtil
  *
  * @author trance
- * @description message util
+ * @description 字符串消息工具类
  * @date 2021/2/2
  */
 public class MessageUtil {

@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<configuration>
+
+    <!-- 控制台渲染器 -->
+    <appender name="stdout" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder charset="UTF-8">
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} %L - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- 信息级别渲染器 -->
+    <appender name="alone_info" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>../../logs/info.log</file>
+        <append>true</append>
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>INFO</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>../../logs/info.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>14</maxHistory>
+        </rollingPolicy>
+        <encoder charset="UTF-8">
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} %L - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- 错误级别渲染器 -->
+    <appender name="alone_error" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>../../logs/error.log</file>
+        <append>true</append>
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>INFO</level>
+            <onMatch>ACCEPT</onMatch>
+            <onMismatch>DENY</onMismatch>
+        </filter>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>../../logs/error.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <maxHistory>14</maxHistory>
+        </rollingPolicy>
+        <encoder charset="UTF-8">
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} %L - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- 指定包下的日志打印级别 -->
+    <logger name="com.twotrance.alone" level="info" additivity="false">
+        <appender-ref ref="stdout"/>
+        <appender-ref ref="alone_info"/>
+        <appender-ref ref="alone_error"/>
+    </logger>
+
+    <logger name="org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping" level="debug"
+            additivity="false">
+        <appender-ref ref="stdout"/>
+    </logger>
+
+    <logger name="org.springframework.orm.jpa.JpaTransactionManager" level="debug"
+            additivity="false">
+        <appender-ref ref="stdout"/>
+    </logger>
+
+    <logger name="org.hibernate.type.descriptor.sql.BasicBinder" level="trace"
+            additivity="false">
+        <appender-ref ref="stdout"/>
+    </logger>
+
+    <root level="info">
+        <appender-ref ref="stdout"/>
+        <appender-ref ref="alone_info"/>
+        <appender-ref ref="alone_error"/>
+    </root>
+
+</configuration>

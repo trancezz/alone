@@ -4,14 +4,13 @@ package com.twotrance.alone.common.utils;
  * EnThread
  *
  * @author trance
- * @description enhance thread
+ * @description 增强线程类
  */
 public class EnThread extends Thread {
 
     public EnThread(Runnable runnable) {
         super(runnable);
     }
-
 
     public EnThread rename(String name) {
         super.setName(name);
@@ -22,5 +21,4 @@ public class EnThread extends Thread {
         super.setDaemon(flag);
         return this;
     }
-
 }

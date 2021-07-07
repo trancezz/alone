@@ -18,6 +18,6 @@ import java.io.Serializable;
 @AllArgsConstructor
 public class MidInfo implements Serializable {
     private String ipAndPort;
-    private long mid;
-    private long timestamp;
+    private Long mid;
+    private Long timestamp;
 }

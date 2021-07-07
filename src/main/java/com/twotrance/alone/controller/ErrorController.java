@@ -1,9 +1,9 @@
 package com.twotrance.alone.controller;
 
-import cn.hutool.json.JSONUtil;
+import com.twotrance.alone.common.vo.Result;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -17,12 +17,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class ErrorController {
 
     @GetMapping("/error/404")
-    public ResponseEntity error404() {
-        return new ResponseEntity(JSONUtil.createObj().putOnce("code", 404).putOnce("message", "未找到相关内容").toStringPretty(), HttpStatus.valueOf(404));
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public Result error404() {
+        return new Result(404L, "not found", -1L);
     }
 
     @GetMapping("/error/500")
-    public ResponseEntity error500() {
-        return new ResponseEntity(JSONUtil.createObj().putOnce("code", 500).putOnce("message", "服务器异常").toStringPretty(), HttpStatus.valueOf(500));
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    public Result error500() {
+        return new Result(500L, "server error", -1L);
     }
 }

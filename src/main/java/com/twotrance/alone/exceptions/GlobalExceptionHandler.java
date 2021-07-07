@@ -1,9 +1,10 @@
 package com.twotrance.alone.exceptions;
 
-import cn.hutool.json.JSONUtil;
+import com.twotrance.alone.common.vo.Result;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
@@ -17,24 +18,28 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 public class GlobalExceptionHandler {
 
     /**
-     * 未找到业务异常
+     * 服务通用异常
      *
      * @param e 异常
-     * @return ResponseEntity
+     * @return Result
      */
     @ExceptionHandler(ServerCommonException.class)
-    public ResponseEntity serverCommonException(ServerCommonException e) {
-        return new ResponseEntity(JSONUtil.createObj().putOnce("code", e.getCode()).putOnce("message", e.getMessage()).toStringPretty(), HttpStatus.valueOf(500));
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    public Result serverCommonException(ServerCommonException e) {
+        return new Result(e.getCode(), e.getMessage(), -1L);
     }
 
     /**
      * 未知异常
      *
-     * @return ResponseEntity
+     * @return Result
      */
     @ExceptionHandler(Exception.class)
-    public ResponseEntity exception() {
-        return new ResponseEntity(JSONUtil.createObj().putOnce("code", 1000).putOnce("message", "unknown exception").toStringPretty(), HttpStatus.valueOf(500));
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    public Result exception(Exception e) {
+        e.printStackTrace();
+        return new Result(1000L, "unknown exception", -1L);
     }
+
 
 }
