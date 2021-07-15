@@ -4,6 +4,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import javax.persistence.*;
+import javax.validation.constraints.NotNull;
 import java.util.Date;
 
 /**
@@ -23,6 +24,7 @@ public class Paragraph {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     // 手机号码
+    @NotNull(message = "{com.twotrance.alone.Phone.NotNull}")
     @Column(name = "phone", length = 11, nullable = false)
     private String phone;
     // 模块名称

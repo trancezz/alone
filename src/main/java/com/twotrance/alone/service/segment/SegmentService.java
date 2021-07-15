@@ -2,21 +2,20 @@ package com.twotrance.alone.service.segment;
 
 import cn.hutool.core.collection.CollStreamUtil;
 import cn.hutool.core.collection.CollUtil;
-
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.log.Log;
 import cn.hutool.log.LogFactory;
 import com.twotrance.alone.common.constants.Constants;
+import com.twotrance.alone.common.utils.EnThread;
 import com.twotrance.alone.config.ExceptionHandler;
 import com.twotrance.alone.model.segment.Paragraph;
-import com.twotrance.alone.service.AbstractIDGenerate;
-import com.twotrance.alone.common.utils.EnThread;
 import com.twotrance.alone.model.segment.Segment;
 import com.twotrance.alone.model.segment.SegmentBuffer;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.*;
 import java.util.function.BiConsumer;
 
@@ -28,7 +27,7 @@ import java.util.function.BiConsumer;
  */
 @Service
 @Transactional
-public class SegmentService extends AbstractIDGenerate {
+public class SegmentService{
 
     /**
      * logger
@@ -70,7 +69,6 @@ public class SegmentService extends AbstractIDGenerate {
     /**
      * initialize the cache
      */
-    @Override
     public void init() {
         updateCache();
         cacheInit = true;
@@ -122,11 +120,9 @@ public class SegmentService extends AbstractIDGenerate {
      * @param model model
      * @return long
      */
-    @Override
-    public Long id(String model, String phone, String appKey) {
-        validAppKey(phone, appKey);
-        if (StrUtil.isEmpty(model)) throwException(3001);
-        if (!paragraphService.hasModel(phone, model)) throwException(3001);
+    public Long id(String model, String phone) {
+        if (StrUtil.isEmpty(model)) ex.exception(3001);
+        if (!paragraphService.hasModel(phone, model)) ex.exception(3001);
         if (cacheInit && cache.containsKey(model)) {
             SegmentBuffer segmentBuffer = cache.get(model);
             segmentBuffer.getLock().lock();
@@ -136,9 +132,8 @@ public class SegmentService extends AbstractIDGenerate {
             segmentBuffer.getLock().unlock();
             return produceID(phone, segmentBuffer);
         }
-        log.error(getException(3001));
-        throwException(3001);
-        return -1L;
+        log.error(ex.exception(3001));
+        throw ex.exception(3001);
     }
 
     /**
@@ -168,8 +163,8 @@ public class SegmentService extends AbstractIDGenerate {
             segmentBuffer.setInit(true);
         } catch (Exception e) {
             e.printStackTrace();
-            log.error(getException(3003));
-            throwException(1001);
+            log.error(ex.exception(3003));
+            throw ex.exception(1001);
         }
     }
 
@@ -238,8 +233,8 @@ public class SegmentService extends AbstractIDGenerate {
                 return id;
             }
         } catch (InterruptedException e) {
-            log.error(getException(3002));
-            throwException(1001);
+            log.error(ex.exception(3002));
+            throw ex.exception(1001);
         } finally {
             segmentBuffer.getLock().unlock();
         }

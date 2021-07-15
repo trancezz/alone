@@ -11,12 +11,12 @@ import lombok.Getter;
 public class ServerCommonException extends RuntimeException {
 
     @Getter
-    private long code;
+    private Integer code;
 
     @Getter
     private String message;
 
-    public ServerCommonException(long code, String message) {
+    public ServerCommonException(Integer code, String message) {
         super(message);
         this.code = code;
         this.message = message;

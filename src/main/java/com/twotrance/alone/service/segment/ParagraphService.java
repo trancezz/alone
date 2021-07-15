@@ -2,9 +2,9 @@ package com.twotrance.alone.service.segment;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjectUtil;
+import com.twotrance.alone.config.ExceptionHandler;
 import com.twotrance.alone.model.segment.Paragraph;
 import com.twotrance.alone.repositorys.ParagraphRepository;
-import com.twotrance.alone.service.common.BaseAbstractService;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
@@ -20,10 +20,13 @@ import java.util.Set;
  * @description paragraph service
  */
 @Service
-public class ParagraphService extends BaseAbstractService {
+public class ParagraphService {
 
     @Resource
     private ParagraphRepository paragraphRepository;
+
+    @Resource
+    private ExceptionHandler ex;
 
     public Set<String> models() {
         return Optional.ofNullable(paragraphRepository.models()).orElse(CollUtil.empty(HashSet.class));
@@ -34,16 +37,14 @@ public class ParagraphService extends BaseAbstractService {
     }
 
     public Paragraph addModel(Paragraph paragraph) {
-        if (!validAppKey(paragraph.getPhone(), paragraph.getAppKey()).getAdmin().booleanValue())
-            throwException(1003);
         Paragraph exParagraph = paragraphRepository.findByPhoneAndModel(paragraph.getPhone(), paragraph.getModel());
         if (ObjectUtil.isNotEmpty(exParagraph))
-            throwException(3005);
+            ex.exception(3005);
         Paragraph saveParagraph = null;
         try {
             saveParagraph = paragraphRepository.save(paragraph);
         } catch (Exception e) {
-            throwException(1001);
+            ex.exception(1001);
         }
         return saveParagraph;
     }

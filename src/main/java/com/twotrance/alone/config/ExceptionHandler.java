@@ -3,14 +3,12 @@ package com.twotrance.alone.config;
 import cn.hutool.core.util.StrUtil;
 import com.twotrance.alone.common.utils.MessageUtil;
 import com.twotrance.alone.exceptions.ServerCommonException;
-import lombok.Getter;
-import lombok.Setter;
-import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.context.annotation.PropertySource;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.stereotype.Component;
 
-import java.util.HashMap;
-import java.util.Map;
+import javax.annotation.Resource;
+import java.text.MessageFormat;
 
 /**
  * ExceptionHandler
@@ -20,24 +18,20 @@ import java.util.Map;
  * @date 2021/2/2
  */
 @Component
-@ConfigurationProperties("exception")
-@PropertySource(value = "classpath:exception.properties", encoding = "utf-8")
 public class ExceptionHandler {
 
-    @Getter
-    @Setter
-    private Map<Integer, String> codes = new HashMap<>();
-
+    @Resource(name = "messageSource")
+    private MessageSource messageSource;
 
     public ServerCommonException exception(Integer code) {
         return exception(code, null);
     }
 
     public ServerCommonException exception(Integer code, String... params) {
-        String message = codes.get(code);
+        String message = messageSource.getMessage(MessageFormat.format("exception.codes[{0}]", code.toString()), null, LocaleContextHolder.getLocale());
         if (StrUtil.isBlank(message)) {
             code = 1001;
-            message = codes.get(code);
+            message = messageSource.getMessage(MessageFormat.format("exception.codes[{0}]", code.toString()), null, LocaleContextHolder.getLocale());
         }
         return new ServerCommonException(code, MessageUtil.format(message, params));
     }

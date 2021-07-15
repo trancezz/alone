@@ -5,7 +5,6 @@ import cn.hutool.log.Log;
 import cn.hutool.log.LogFactory;
 import com.twotrance.alone.common.constants.Constants;
 import com.twotrance.alone.config.ExceptionHandler;
-import com.twotrance.alone.service.AbstractIDGenerate;
 import org.springframework.stereotype.Service;
 
 /**
@@ -16,7 +15,7 @@ import org.springframework.stereotype.Service;
  * @date 2021/1/26
  */
 @Service
-public class SnowFlakeService extends AbstractIDGenerate {
+public class SnowFlakeService {
 
     /**
      * logger
@@ -91,12 +90,9 @@ public class SnowFlakeService extends AbstractIDGenerate {
     /**
      * generate snowflake id
      *
-     * @param bizKey useless arguments
      * @return long
      */
-    @Override
-    public synchronized Long id(String bizKey, String phone, String appKey) {
-        validAppKey(phone, appKey);
+    public synchronized Long id() {
         verifyMidIsValid();
         long timestamp = genTime();
         if (legalTime(timestamp)) {
@@ -106,15 +102,15 @@ public class SnowFlakeService extends AbstractIDGenerate {
                     wait(callbackTimeMS << 1);
                     timestamp = genTime();
                     if (legalTime(timestamp)) {
-                        log.error(getException(2003));
-                        throwException(1001);
+                        log.error(ex.exception(2003));
+                        throw ex.exception(1001);
                     }
                 } catch (InterruptedException e) {
-                    log.error(getException(2004));
-                    throwException(1001);
+                    log.error(ex.exception(2004));
+                    throw ex.exception(1001);
                 }
             } else {
-                log.error(getException(2005));
+                log.error(ex.exception(2005));
                 throw ex.exception(1001);
             }
         }
@@ -170,13 +166,13 @@ public class SnowFlakeService extends AbstractIDGenerate {
      */
     private void verifyMidIsValid() {
         if (!midService.midIsValid()) {
-            log.error(getException(2002));
+            log.error(ex.exception(2002));
             midService.init();
             machineID = midService.getMachineID();
             if (log.isInfoEnabled())
                 log.info(Constants.LOG_PREFIX_PLACEHOLDER_MODE, "rebuild machine id = " + machineID.toString());
             midInScope();
-            throwException(1001);
+            ex.exception(1001);
         }
     }
 
@@ -185,8 +181,8 @@ public class SnowFlakeService extends AbstractIDGenerate {
      */
     private void midInScope() {
         if (-1 == machineID) {
-            log.error(getException(2001));
-            throwException(1001);
+            log.error(ex.exception(2001));
+            throw ex.exception(1001);
         }
     }
 }

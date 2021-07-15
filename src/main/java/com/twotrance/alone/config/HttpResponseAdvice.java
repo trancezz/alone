@@ -1,6 +1,6 @@
 package com.twotrance.alone.config;
 
-import com.twotrance.alone.common.vo.Result;
+import com.twotrance.alone.common.vo.R;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.HttpMessageConverter;
@@ -26,14 +26,11 @@ public class HttpResponseAdvice implements ResponseBodyAdvice<Object> {
 
     @Override
     public Object beforeBodyWrite(Object body, MethodParameter returnType, MediaType selectedContentType, Class<? extends HttpMessageConverter<?>> selectedConverterType, ServerHttpRequest request, ServerHttpResponse response) {
-        Result<Object> result = new Result();
         if (null == body) {
-            return result;
-        } else if (body instanceof Result) {
-            result = (Result<Object>) body;
-        } else {
-            result.setData(body);
+            return R.success();
+        } else if (body instanceof R) {
+            return body;
         }
-        return result;
+        return R.success().data(body);
     }
 }
