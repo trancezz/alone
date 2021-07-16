@@ -96,6 +96,12 @@
             <artifactId>hutool-log</artifactId>
             <version>${hu-tool.version}</version>
         </dependency>
+        <!-- Hu Tool Http -->
+        <dependency>
+            <groupId>cn.hutool</groupId>
+            <artifactId>hutool-http</artifactId>
+            <version>${hu-tool.version}</version>
+        </dependency>
         <!-- MySQL Connection Driver -->
         <dependency>
             <groupId>mysql</groupId>

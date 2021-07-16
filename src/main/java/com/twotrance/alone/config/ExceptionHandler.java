@@ -23,6 +23,10 @@ public class ExceptionHandler {
     @Resource(name = "messageSource")
     private MessageSource messageSource;
 
+    public String getMessage(Integer code) {
+        return messageSource.getMessage(MessageFormat.format("exception.codes[{0}]", code.toString()), null, LocaleContextHolder.getLocale());
+    }
+
     public ServerCommonException exception(Integer code) {
         return exception(code, null);
     }

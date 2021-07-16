@@ -1,5 +1,8 @@
 package com.twotrance.alone.config;
 
+import cn.hutool.core.map.MapUtil;
+import org.hibernate.Hibernate;
+import org.hibernate.validator.HibernateValidatorConfiguration;
 import org.springframework.boot.validation.MessageInterpolatorFactory;
 import org.springframework.boot.web.server.ConfigurableWebServerFactory;
 import org.springframework.boot.web.server.ErrorPage;
@@ -52,6 +55,7 @@ public class WebMvcConfiguration implements WebMvcConfigurer {
         MessageInterpolatorFactory interpolatorFactory = new MessageInterpolatorFactory();
         factoryBean.setMessageInterpolator(interpolatorFactory.getObject());
         factoryBean.setValidationMessageSource(messageSource());
+        factoryBean.setValidationPropertyMap(MapUtil.of(HibernateValidatorConfiguration.FAIL_FAST, "true"));
         return factoryBean;
     }
 }

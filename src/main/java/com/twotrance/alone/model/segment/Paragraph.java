@@ -2,9 +2,13 @@ package com.twotrance.alone.model.segment;
 
 import lombok.Getter;
 import lombok.Setter;
+import lombok.ToString;
 
 import javax.persistence.*;
+import javax.validation.constraints.Max;
+import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
+import javax.validation.constraints.Pattern;
 import java.util.Date;
 
 /**
@@ -16,6 +20,7 @@ import java.util.Date;
  */
 @Getter
 @Setter
+@ToString
 @Entity
 @Table(name = "paragraph")
 public class Paragraph {
@@ -24,21 +29,26 @@ public class Paragraph {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     // 手机号码
-    @NotNull(message = "{com.twotrance.alone.Phone.NotNull}")
+    @NotNull(message = "{Phone.NotNull}")
+    @Pattern(message = "{Phone.Pattern}", regexp = "^(13[0-9]|14[01456879]|15[0-35-9]|16[2567]|17[0-8]|18[0-9]|19[0-35-9])\\d{8}$")
     @Column(name = "phone", length = 11, nullable = false)
     private String phone;
     // 模块名称
-    @Column(name = "model", unique = true, length = 128, nullable = false)
+    @NotNull(message = "{Model.NotNull}")
+    @Column(name = "model", unique = true, nullable = false, length = 128)
     private String model;
     // 当前此区间模块产生的最大ID
-    @Column(name = "max", length = 20, nullable = false)
+    @Column(name = "max", length = 20)
     private Long max;
     // 区间长度
-    @Column(name = "length", length = 20, nullable = false)
+    @NotNull(message = "{Length.NotNull}")
+    @Min(value = 1, message = "{Length.Min}")
+    @Max(value = 10000, message = "{Length.Max}")
+    @Column(name = "length", nullable = false, length = 20)
     private Long length;
     // 备注
-    @Column(name = "desc", length = 500)
-    private String desc;
+    @Column(name = "remark", length = 500)
+    private String remark;
     // 是否删除
     @Column(name = "is_delete", nullable = false, length = 1)
     private Boolean delete;
@@ -53,6 +63,7 @@ public class Paragraph {
     private Date deleteTime;
 
     // 非映射字段, 秘钥
+    @NotNull(message = "{AppKey.NotNull}")
     @Transient
     private String appKey;
 }

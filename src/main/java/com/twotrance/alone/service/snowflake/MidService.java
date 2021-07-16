@@ -103,7 +103,6 @@ public class MidService {
      */
     public void init() {
         ipAndPort = ip + "-" + port;
-        // local cache map options
         LocalCachedMapOptions localCachedMapOptions = LocalCachedMapOptions.defaults()
                 .evictionPolicy(LocalCachedMapOptions.EvictionPolicy.LFU)
                 .cacheSize(500)

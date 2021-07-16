@@ -8,6 +8,7 @@ import com.twotrance.alone.repositorys.ParagraphRepository;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
@@ -42,6 +43,10 @@ public class ParagraphService {
             ex.exception(3005);
         Paragraph saveParagraph = null;
         try {
+            paragraph.setMax(1L);
+            paragraph.setDelete(false);
+            paragraph.setCreateTime(new Date());
+            paragraph.setMax(paragraph.getLength() + 1);
             saveParagraph = paragraphRepository.save(paragraph);
         } catch (Exception e) {
             ex.exception(1001);
