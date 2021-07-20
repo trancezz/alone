@@ -20,6 +20,7 @@ public class R {
         R r = new R();
         r.code(200);
         r.message("ok");
+        r.data(-1);
         return r;
     }
 

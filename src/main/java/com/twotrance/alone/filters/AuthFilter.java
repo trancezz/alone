@@ -72,6 +72,9 @@ public class AuthFilter implements Filter {
                     return;
                 }
             }
+            requestOfBody.setAttribute("phone", phone);
+            requestOfBody.setAttribute("appKey", appKey);
+            requestOfBody.setAttribute("isAdmin", aloneKey.getAdmin().booleanValue());
             filterChain.doFilter(requestOfBody, response);
         }
     }

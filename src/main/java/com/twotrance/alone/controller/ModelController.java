@@ -6,13 +6,11 @@ import com.twotrance.alone.config.ExceptionHandler;
 import com.twotrance.alone.model.segment.Paragraph;
 import com.twotrance.alone.service.segment.ParagraphService;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
 import javax.annotation.Resource;
+import javax.servlet.http.HttpServletRequest;
 
 /**
  * ModelController
@@ -34,7 +32,21 @@ public class ModelController {
     public Mono<R> addModel(@RequestBody @Validated Paragraph paragraph) {
         Paragraph resultParagraph = paragraphService.addModel(paragraph);
         if (ObjectUtil.isEmpty(resultParagraph))
-            return Mono.just(R.error().code(3006).message(ex.getMessage(3006)).data(-1));
+            return Mono.just(R.error().code(3006).message(ex.getMessage(3006)));
+        return Mono.just(R.success().data(resultParagraph));
+    }
+
+    @PutMapping
+    public Mono<R> editModel(@RequestParam("model") String model, @RequestParam("len") Long len, HttpServletRequest request) {
+        paragraphService.updateOfLen(len, model, request.getAttribute("phone").toString());
+        return Mono.just(R.success());
+    }
+
+    @DeleteMapping("/{model}")
+    public Mono<R> delModel(@PathVariable("model") String model, HttpServletRequest request) {
+        Paragraph resultParagraph = paragraphService.delModel(model, request.getAttribute("phone").toString());
+        if (ObjectUtil.isEmpty(resultParagraph))
+            return Mono.just(R.error().code(3007).message(ex.getMessage(3007)));
         return Mono.just(R.success().data(resultParagraph));
     }
 

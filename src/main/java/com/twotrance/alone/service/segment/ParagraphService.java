@@ -2,6 +2,8 @@ package com.twotrance.alone.service.segment;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjectUtil;
+import cn.hutool.log.Log;
+import cn.hutool.log.LogFactory;
 import com.twotrance.alone.config.ExceptionHandler;
 import com.twotrance.alone.model.segment.Paragraph;
 import com.twotrance.alone.repositorys.ParagraphRepository;
@@ -23,6 +25,11 @@ import java.util.Set;
 @Service
 public class ParagraphService {
 
+    /**
+     * logger
+     */
+    Log log = LogFactory.get(this.getClass());
+
     @Resource
     private ParagraphRepository paragraphRepository;
 
@@ -37,11 +44,22 @@ public class ParagraphService {
         paragraphRepository.updateOfMax(newMax, model, oldMax);
     }
 
+    public void updateOfLen(Long len, String model, String phone) {
+        Paragraph paragraph = paragraphRepository.findByPhoneAndModel(phone, model);
+        if (ObjectUtil.isEmpty(paragraph)) {
+            log.error(ex.exception(3001));
+            throw ex.exception(3001);
+        }
+        paragraphRepository.updateOfLen(len, model, phone, paragraph.getLength());
+    }
+
     public Paragraph addModel(Paragraph paragraph) {
         Paragraph exParagraph = paragraphRepository.findByPhoneAndModel(paragraph.getPhone(), paragraph.getModel());
-        if (ObjectUtil.isNotEmpty(exParagraph))
-            ex.exception(3005);
-        Paragraph saveParagraph = null;
+        if (ObjectUtil.isNotEmpty(exParagraph)) {
+            log.error(ex.exception(3006));
+            throw ex.exception(3005);
+        }
+        Paragraph saveParagraph;
         try {
             paragraph.setMax(1L);
             paragraph.setDelete(false);
@@ -49,9 +67,21 @@ public class ParagraphService {
             paragraph.setMax(paragraph.getLength() + 1);
             saveParagraph = paragraphRepository.save(paragraph);
         } catch (Exception e) {
-            ex.exception(1001);
+            log.error(ex.exception(3006));
+            throw ex.exception(3006);
         }
         return saveParagraph;
+    }
+
+    public Paragraph delModel(String model, String phone) {
+        Paragraph paragraph = paragraphRepository.findByPhoneAndModel(model, phone);
+        if (ObjectUtil.isEmpty(paragraph)) {
+            log.error(ex.exception(3001));
+            throw ex.exception(3001);
+        }
+        paragraph.setDelete(true);
+        paragraph.setUpdateTime(new Date());
+        return paragraphRepository.save(paragraph);
     }
 
     public Paragraph model(String phone, String model) {

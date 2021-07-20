@@ -28,4 +28,8 @@ public interface ParagraphRepository extends JpaRepository<Paragraph, Long> {
     @Query(value = "update Paragraph as p set p.max = :len + p.max, p.length = :len, p.updateTime = current_date where p.model = :model and p.max = :oldMax")
     void updateOfMax(@Param("len") Long len, @Param("model") String model, @Param("oldMax") Long oldMax);
 
+    @Modifying
+    @Query(value = "update Paragraph as p set p.length = :len, p.updateTime = current_date where p.model = :model and p.phone = :phone and p.length = :oldLen")
+    void updateOfLen(@Param("len") Long len, @Param("model") String model, @Param("phone") String phone, @Param("oldLen") Long oldLen);
+
 }

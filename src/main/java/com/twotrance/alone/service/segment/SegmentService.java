@@ -27,7 +27,7 @@ import java.util.function.BiConsumer;
  */
 @Service
 @Transactional
-public class SegmentService{
+public class SegmentService {
 
     /**
      * logger
@@ -69,7 +69,7 @@ public class SegmentService{
     /**
      * initialize the cache
      */
-    public void init() {
+    private void init() {
         updateCache();
         cacheInit = true;
         loopUpdateCacheByOneMinute();
@@ -78,7 +78,7 @@ public class SegmentService{
     /**
      * update the cache
      */
-    private void updateCache() {
+    public void updateCache() {
         Set<String> models = CollStreamUtil.toSet(paragraphService.models(), model -> model);
         if (CollUtil.isEmpty(models))
             return;
@@ -143,7 +143,7 @@ public class SegmentService{
      * @param segmentBuffer
      * @param segment
      */
-    public void updateSegment(String phone, String model, SegmentBuffer segmentBuffer, Segment segment) {
+    private void updateSegment(String phone, String model, SegmentBuffer segmentBuffer, Segment segment) {
         try {
             Paragraph paragraph = paragraphService.model(phone, model);
             if (!segmentBuffer.getInit()) {
@@ -175,7 +175,7 @@ public class SegmentService{
      * @param length
      * @return
      */
-    public Long calcNextLength(Long updateTimestamp, Long length) {
+    private Long calcNextLength(Long updateTimestamp, Long length) {
         long accordingTime = 15 * 60 * 1000L;
         long timeDiff = System.currentTimeMillis() - updateTimestamp;
         long nextLength = 0;
