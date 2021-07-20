@@ -10,4 +10,4 @@
 + Redis 3.2.100
 + MySQL 5.7
 
-*注意 需要自己构建 application.properties/yml 因为每个人的环境不同*
+<big>注意：需要自己构建 application.properties/yml 因为每个人的环境不同</big>
